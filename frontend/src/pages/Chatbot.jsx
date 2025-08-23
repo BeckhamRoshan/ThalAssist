@@ -61,7 +61,7 @@ function Chatbot() {
     setIsTyping(true);
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/chat?query=${encodeURIComponent(text.trim())}`);
+      const response = await fetch(`http://thalassist-cpbgcyhwb7epe5ev.southcentralus-01.azurewebsites.net/chat?query=${encodeURIComponent(text.trim())}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

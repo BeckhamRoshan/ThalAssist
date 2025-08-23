@@ -58,7 +58,7 @@ function DonorMatch() {
 
     try {
       const queryParams = new URLSearchParams(searchParams);
-      const response = await fetch(`http://127.0.0.1:8000/donor-match?${queryParams}`);
+      const response = await fetch(`http://thalassist-cpbgcyhwb7epe5ev.southcentralus-01.azurewebsites.net/donor-match?${queryParams}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
