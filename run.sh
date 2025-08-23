@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# ThalAssist+ Startup Script
 echo "🩸 Starting ThalAssist+ Application..."
 
 # Colors for output
@@ -14,117 +13,89 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Check if Python is installed
-if ! command_exists python3; then
-    echo -e "${RED}❌ Python 3 is not installed. Please install Python 3.8 or higher.${NC}"
+# Check prerequisites
+for cmd in python3 node npm; do
+  if ! command_exists $cmd; then
+    echo -e "${RED}❌ $cmd is not installed.${NC}"
     exit 1
-fi
-
-# Check if Node.js is installed
-if ! command_exists node; then
-    echo -e "${RED}❌ Node.js is not installed. Please install Node.js 16 or higher.${NC}"
-    exit 1
-fi
-
-# Check if npm is installed
-if ! command_exists npm; then
-    echo -e "${RED}❌ npm is not installed. Please install npm.${NC}"
-    exit 1
-fi
+  fi
+done
 
 echo -e "${GREEN}✅ Prerequisites check passed${NC}"
 
-# Setup backend
+# ---- Backend Setup ----
 echo -e "${YELLOW}🔧 Setting up backend...${NC}"
 cd backend
 
 # Create virtual environment if it doesn't exist
 if [ ! -d ".venv" ]; then
     echo "Creating Python virtual environment..."
-    python3 -m venv .venv
+    python -m venv .venv
 fi
 
-# Activate virtual environment
-echo "Activating virtual environment..."
-source .venv/bin/activate || source .venv/Scripts/activate
+# Activate virtual environment (Git Bash / Windows)
+if [ -f ".venv/Scripts/activate" ]; then
+    source .venv/Scripts/activate
+elif [ -f ".venv/bin/activate" ]; then
+    source .venv/bin/activate
+else
+    echo -e "${RED}❌ Virtual environment activate script not found!${NC}"
+    exit 1
+fi
 
-# Install Python dependencies
+# Install dependencies
 echo "Installing Python dependencies..."
+pip install --upgrade pip
 pip install -r requirements.txt
-
-# Create necessary directories
-mkdir -p app/services/utils
 
 echo -e "${GREEN}✅ Backend setup complete${NC}"
 
-# Setup frontend
+# ---- Frontend Setup ----
 echo -e "${YELLOW}🔧 Setting up frontend...${NC}"
 cd ../frontend
-
-# Install Node.js dependencies
-echo "Installing Node.js dependencies..."
 npm install
 
 echo -e "${GREEN}✅ Frontend setup complete${NC}"
 
-# Function to start backend
+# ---- Start Backend ----
 start_backend() {
     echo -e "${YELLOW}🚀 Starting backend server...${NC}"
-    cd backend
-    source .venv/bin/activate || source .venv/Scripts/activate
-    export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+    cd ../backend
+    source .venv/Scripts/activate
     uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
     BACKEND_PID=$!
     echo -e "${GREEN}✅ Backend started on http://127.0.0.1:8000${NC}"
 }
 
-# Function to start frontend
+# ---- Start Frontend ----
 start_frontend() {
     echo -e "${YELLOW}🚀 Starting frontend server...${NC}"
-    cd frontend
+    cd ../frontend
     npm start &
     FRONTEND_PID=$!
     echo -e "${GREEN}✅ Frontend started on http://localhost:3000${NC}"
 }
 
-# Function to cleanup processes
+# Cleanup function
 cleanup() {
     echo -e "${YELLOW}🛑 Stopping servers...${NC}"
-    if [ ! -z "$BACKEND_PID" ]; then
-        kill $BACKEND_PID 2>/dev/null
-    fi
-    if [ ! -z "$FRONTEND_PID" ]; then
-        kill $FRONTEND_PID 2>/dev/null
-    fi
+    if [ ! -z "$BACKEND_PID" ]; then kill $BACKEND_PID 2>/dev/null; fi
+    if [ ! -z "$FRONTEND_PID" ]; then kill $FRONTEND_PID 2>/dev/null; fi
     echo -e "${GREEN}✅ Servers stopped${NC}"
     exit 0
 }
-
-# Set up trap for cleanup
 trap cleanup INT TERM
 
-# Start both servers
-echo -e "${YELLOW}🚀 Starting ThalAssist+ servers...${NC}"
-
-# Go back to root directory
-cd ..
-
-# Start backend
+# Start servers
 start_backend
 sleep 3
-
-# Start frontend  
 start_frontend
 sleep 3
 
-echo -e "${GREEN}"
-echo "🎉 ThalAssist+ is now running!"
+echo -e "${GREEN}🎉 ThalAssist+ is now running!"
 echo "📱 Frontend: http://localhost:3000"
 echo "🔌 Backend API: http://127.0.0.1:8000"
 echo "📖 API Docs: http://127.0.0.1:8000/docs"
-echo ""
-echo "Press Ctrl+C to stop both servers"
-echo -e "${NC}"
+echo "Press Ctrl+C to stop both servers${NC}"
 
-# Wait for background processes
 wait
