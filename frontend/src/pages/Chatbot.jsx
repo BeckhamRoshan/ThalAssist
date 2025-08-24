@@ -1,118 +1,174 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './Chatbot.css';
 
-function Chatbot() {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      type: 'bot',
-      text: 'Hello! I\'m ThalAssist+, your AI assistant for thalassemia information. I can help you with treatment info, symptoms, diet advice, and more. How can I assist you today?',
-      timestamp: new Date(),
-      suggestions: [
-        'What is thalassemia?',
-        'Find blood banks near me',
-        'Thalassemia treatment options',
-        'Diet for thalassemia patients'
-      ]
-    }
-  ]);
-  const [inputText, setInputText] = useState('');
+const Chatbot = () => {
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [aiAnalytics, setAiAnalytics] = useState(null);
   const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
 
-  const quickQuestions = [
-    { text: 'What is thalassemia?', icon: '❓' },
-    { text: 'Thalassemia symptoms', icon: '🩺' },
-    { text: 'Treatment options', icon: '💊' },
-    { text: 'Diet and nutrition', icon: '🍎' },
-    { text: 'Blood transfusion info', icon: '🩸' },
-    { text: 'Find blood banks', icon: '🏥' },
-    { text: 'Prevention tips', icon: '🛡️' },
-    { text: 'Living with thalassemia', icon: '💪' }
-  ];
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
+    // Initialize with AI greeting
+    const initChat = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: 'hello' }),
+        });
+
+        const data = await response.json();
+        setMessages([{
+          type: 'bot',
+          content: data.response,
+          timestamp: new Date(),
+          aiCategory: data.ai_category,
+          confidence: data.confidence,
+          aiActions: data.ai_actions,
+          suggestedQueries: data.suggested_queries
+        }]);
+      } catch (error) {
+        console.error('Error initializing chat:', error);
+      }
+    };
+
+    initChat();
+    loadAiAnalytics();
   }, []);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const loadAiAnalytics = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/ai/analytics');
+      const analytics = await response.json();
+      setAiAnalytics(analytics);
+    } catch (error) {
+      console.error('Error loading analytics:', error);
+    }
   };
 
-  const sendMessage = async (text) => {
-    if (!text.trim()) return;
+  const sendMessage = async (messageText = null) => {
+    const message = messageText || inputMessage.trim();
+    if (!message) return;
 
     const userMessage = {
-      id: Date.now(),
       type: 'user',
-      text: text.trim(),
+      content: message,
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setInputText('');
+    setInputMessage('');
+    setIsLoading(true);
     setIsTyping(true);
 
     try {
-      const response = await fetch(`http://thalassist-cpbgcyhwb7epe5ev.southcentralus-01.azurewebsites.net/chat?query=${encodeURIComponent(text.trim())}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      const response = await fetch('http://localhost:8000/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message, location: 'Hyderabad' }),
+      });
 
       const data = await response.json();
-      
-      // Simulate typing delay
+
       setTimeout(() => {
         const botMessage = {
-          id: Date.now() + 1,
           type: 'bot',
-          text: data.response,
+          content: data.response,
           timestamp: new Date(),
-          topic: data.topic,
+          aiCategory: data.ai_category,
           confidence: data.confidence,
-          relatedTopics: data.related_topics,
-          followUpQuestions: data.follow_up_questions,
-          actionButton: data.action_button,
           severity: data.severity,
-          suggestions: data.available_topics,
+          aiActions: data.ai_actions,
+          relatedTopics: data.related_topics,
+          suggestedQueries: data.suggested_queries,
           emergencyContacts: data.emergency_contacts
         };
 
         setMessages(prev => [...prev, botMessage]);
         setIsTyping(false);
-      }, 1000 + Math.random() * 1000); // Random delay between 1-2 seconds
+        setIsLoading(false);
+
+        loadAiAnalytics();
+      }, 1000 + Math.random() * 1000);
 
     } catch (error) {
-      console.error('Chat error:', error);
-      setTimeout(() => {
-        const errorMessage = {
-          id: Date.now() + 1,
-          type: 'bot',
-          text: 'Sorry, I\'m having trouble connecting right now. Please try again or contact support if the problem persists.',
-          timestamp: new Date(),
-          isError: true
-        };
-        setMessages(prev => [...prev, errorMessage]);
-        setIsTyping(false);
-      }, 1000);
+      console.error('Error sending message:', error);
+      const errorMessage = {
+        type: 'bot',
+        content: '❌ Sorry, I encountered an error. Please try again.',
+        timestamp: new Date(),
+        isError: true
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      setIsTyping(false);
+      setIsLoading(false);
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    sendMessage(inputText);
+  const handleBloodBridgeAction = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/blood-bridge/coordinate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blood_type: 'B+',
+          location: 'Hyderabad',
+          urgency: 'high',
+          contact: 'user@example.com'
+        }),
+      });
+
+      const data = await response.json();
+      const actionMessage = {
+        type: 'bot',
+        content: data.response,
+        timestamp: new Date(),
+        isAction: true,
+        actionData: data
+      };
+
+      setMessages(prev => [...prev, actionMessage]);
+    } catch (error) {
+      console.error('Error with blood bridge action:', error);
+    }
   };
 
-  const handleQuickQuestion = (question) => {
-    sendMessage(question);
+  const handleEmergencyRequest = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/emergency/blood-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blood_type: 'O-',
+          location: 'Hyderabad',
+          urgency: 'emergency',
+          contact: 'emergency@example.com'
+        }),
+      });
+
+      const data = await response.json();
+      const emergencyMessage = {
+        type: 'bot',
+        content: data.response,
+        timestamp: new Date(),
+        isEmergency: true,
+        emergencyData: data
+      };
+
+      setMessages(prev => [...prev, emergencyMessage]);
+    } catch (error) {
+      console.error('Error with emergency request:', error);
+    }
   };
 
   const handleSuggestionClick = (suggestion) => {
@@ -120,131 +176,74 @@ function Chatbot() {
   };
 
   const clearChat = () => {
-    setMessages([{
-      id: 1,
-      type: 'bot',
-      text: 'Chat cleared! How can I help you with thalassemia information?',
-      timestamp: new Date(),
-      suggestions: [
-        'What is thalassemia?',
-        'Find blood banks near me',
-        'Thalassemia treatment options',
-        'Diet for thalassemia patients'
-      ]
-    }]);
+    setMessages([]);
   };
 
-  const renderMessage = (message) => {
+  const renderMessage = (message, index) => {
     const isBot = message.type === 'bot';
-    
     return (
-      <div key={message.id} className={`message ${message.type}`}>
-        <div className="message-avatar">
-          {isBot ? '🤖' : '👤'}
-        </div>
-        
+      <div key={index} className={`message ${isBot ? 'bot-message' : 'user-message'}`}>
         <div className="message-content">
-          <div className={`message-bubble ${message.isError ? 'error' : ''} ${message.severity || ''}`}>
-            <p className="message-text">{message.text}</p>
-            
-            {message.topic && (
-              <div className="message-meta">
-                <span className="topic-tag">Topic: {message.topic}</span>
+          {isBot && <div className="bot-avatar">🤖</div>}
+          <div className="message-bubble">
+            <div className="message-text">{message.content}</div>
+
+            {isBot && message.aiCategory && (
+              <div className="ai-metadata">
+                <span className="ai-category">Category: {message.aiCategory}</span>
                 {message.confidence && (
-                  <span className={`confidence-badge ${message.confidence}`}>
-                    {message.confidence} confidence
+                  <span className="ai-confidence">
+                    Confidence: {Math.round(message.confidence * 100)}%
                   </span>
                 )}
-              </div>
-            )}
-
-            {message.actionButton && (
-              <div className="action-button">
-                <button 
-                  className="btn btn-action"
-                  onClick={() => {
-                    if (message.actionButton.action === 'blood_search') {
-                      window.location.href = '/blood-availability';
-                    }
-                  }}
-                >
-                  {message.actionButton.text}
-                </button>
-                <small>{message.actionButton.description}</small>
+                {message.severity && (
+                  <span className={`severity ${message.severity}`}>
+                    {message.severity.toUpperCase()}
+                  </span>
+                )}
               </div>
             )}
 
             {message.emergencyContacts && (
               <div className="emergency-contacts">
                 <h4>🚨 Emergency Contacts:</h4>
-                <div className="contacts-grid">
-                  {Object.entries(message.emergencyContacts).map(([name, number]) => (
-                    <div key={name} className="contact-item">
-                      <span className="contact-name">{name}:</span>
-                      <a href={`tel:${number}`} className="contact-number">{number}</a>
-                    </div>
-                  ))}
-                </div>
+                {message.emergencyContacts.map((contact, idx) => (
+                  <div key={idx} className="emergency-contact">
+                    <strong>{contact.service}:</strong> 
+                    <a href={`tel:${contact.number}`}>{contact.number}</a>
+                  </div>
+                ))}
               </div>
             )}
 
-            {message.relatedTopics && message.relatedTopics.length > 0 && (
-              <div className="related-topics">
-                <h4>Related Topics:</h4>
-                <div className="topics-list">
-                  {message.relatedTopics.map((topic, index) => (
-                    <button
-                      key={index}
-                      className="topic-btn"
-                      onClick={() => handleSuggestionClick(`Tell me about ${topic}`)}
-                    >
-                      {topic}
-                    </button>
-                  ))}
-                </div>
+            {message.aiActions && (
+              <div className="ai-actions">
+                <button 
+                  className="action-button primary"
+                  onClick={() => {
+                    if (message.aiActions.primary === "Start Blood Bridge") handleBloodBridgeAction();
+                    if (message.aiActions.primary === "Activate Emergency Network") handleEmergencyRequest();
+                  }}
+                >
+                  {message.aiActions.primary}
+                </button>
               </div>
             )}
 
-            {message.followUpQuestions && message.followUpQuestions.length > 0 && (
-              <div className="follow-up-questions">
-                <h4>You might also ask:</h4>
-                <div className="questions-list">
-                  {message.followUpQuestions.map((question, index) => (
-                    <button
-                      key={index}
-                      className="question-btn"
-                      onClick={() => handleSuggestionClick(question)}
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
+            {message.suggestedQueries && message.suggestedQueries.length > 0 && (
+              <div className="suggested-queries">
+                <h4>💡 Try asking:</h4>
+                {message.suggestedQueries.map((query, idx) => (
+                  <button key={idx} onClick={() => handleSuggestionClick(query)}>
+                    {query}
+                  </button>
+                ))}
               </div>
             )}
 
-            {message.suggestions && message.suggestions.length > 0 && (
-              <div className="suggestions">
-                <h4>Available Topics:</h4>
-                <div className="suggestions-list">
-                  {message.suggestions.slice(0, 4).map((suggestion, index) => (
-                    <button
-                      key={index}
-                      className="suggestion-btn"
-                      onClick={() => handleSuggestionClick(suggestion)}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="message-time">
-            {message.timestamp.toLocaleTimeString([], { 
-              hour: '2-digit', 
-              minute: '2-digit' 
-            })}
+            <div className="message-time">
+              {message.timestamp.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+            </div>
           </div>
         </div>
       </div>
@@ -252,99 +251,55 @@ function Chatbot() {
   };
 
   return (
-    <div className="chatbot">
-      <div className="container">
-        <div className="chat-container">
-          <div className="chat-header">
-            <div className="chat-title">
-              <h1>🤖 ThalAssist+ AI Assistant</h1>
-              <p>Get instant answers about thalassemia care and treatment</p>
-            </div>
-            <button className="clear-btn" onClick={clearChat}>
-              🗑️ Clear Chat
-            </button>
-          </div>
-
-          <div className="quick-questions">
-            <h3>Quick Questions:</h3>
-            <div className="questions-grid">
-              {quickQuestions.map((question, index) => (
-                <button
-                  key={index}
-                  className="quick-question-btn"
-                  onClick={() => handleQuickQuestion(question.text)}
-                >
-                  <span className="question-icon">{question.icon}</span>
-                  <span className="question-text">{question.text}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="chat-messages">
-            {messages.map(renderMessage)}
-            
-            {isTyping && (
-              <div className="message bot">
-                <div className="message-avatar">🤖</div>
-                <div className="message-content">
-                  <div className="message-bubble typing">
-                    <div className="typing-indicator">
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            <div ref={messagesEndRef} />
-          </div>
-
-          <form onSubmit={handleSubmit} className="chat-input-form">
-            <div className="input-container">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask me about thalassemia..."
-                className="chat-input"
-                disabled={isTyping}
-              />
-              <button
-                type="submit"
-                className="send-btn"
-                disabled={!inputText.trim() || isTyping}
-              >
-                {isTyping ? '⏳' : '🚀'}
-              </button>
-            </div>
-          </form>
-
-          <div className="chat-footer">
-            <div className="chat-info">
-              <p>
-                <strong>Disclaimer:</strong> This AI assistant provides general information about thalassemia. 
-                Always consult with healthcare professionals for medical advice and treatment decisions.
-              </p>
-              <div className="capabilities">
-                <h4>I can help with:</h4>
-                <ul>
-                  <li>✅ General thalassemia information</li>
-                  <li>✅ Treatment and care guidance</li>
-                  <li>✅ Diet and lifestyle tips</li>
-                  <li>✅ Blood bank and donor information</li>
-                  <li>✅ Emergency procedures</li>
-                </ul>
-              </div>
-            </div>
-          </div>
+    <div className="chatbot-container">
+      {aiAnalytics && (
+        <div className="ai-analytics-header">
+          <div>Conversations: {aiAnalytics.total_conversations}</div>
+          <div>Active Requests: {aiAnalytics.active_blood_requests}</div>
+          <div>AI Accuracy: {aiAnalytics.ai_routing_accuracy}</div>
         </div>
+      )}
+
+      <div className="chat-header">
+        <h2>🤖 ThalAssist+ AI Chatbot</h2>
+      </div>
+
+      <div className="chat-messages">
+        {messages.map(renderMessage)}
+        {isTyping && (
+          <div className="message bot-message">
+            <div className="message-content">
+              <div className="bot-avatar">🤖</div>
+              <div className="message-bubble">
+                <div className="typing-indicator"><span></span><span></span><span></span></div>
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef}></div>
+      </div>
+
+      <div className="quick-actions">
+        <button onClick={handleEmergencyRequest}>🚨 Emergency Blood</button>
+        <button onClick={() => sendMessage('Find blood banks near me')}>🩸 Find Blood Banks</button>
+        <button onClick={() => sendMessage('I want to donate blood')}>💝 Become Donor</button>
+      </div>
+
+      <div className="chat-input">
+        <input
+          value={inputMessage}
+          onChange={(e) => setInputMessage(e.target.value)}
+          placeholder="Ask about thalassemia, blood needs, or emergencies..."
+          onKeyPress={(e) => { if (e.key === 'Enter') sendMessage(); }}
+          disabled={isLoading}
+        />
+        <button onClick={() => sendMessage()} disabled={isLoading || !inputMessage.trim()}>
+          {isLoading ? '⏳' : '🚀'}
+        </button>
+        <button onClick={clearChat}>🗑️ Clear Chat</button>
       </div>
     </div>
   );
-}
+};
 
 export default Chatbot;

@@ -41,7 +41,7 @@ function BloodAvailability() {
 
     try {
       const queryParams = new URLSearchParams(searchParams);
-      const response = await fetch(`http://thalassist-cpbgcyhwb7epe5ev.southcentralus-01.azurewebsites.net/blood-availability?${queryParams}`);
+      const response = await fetch(`http://127.0.0.1:8000/blood-availability?${queryParams}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
